@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose:*)",
+      "Bash(docker:*)",
+      "Bash(npm run build)",
+      "Bash(npm run dev:*)",
+      "Bash(npm install)",
+      "Bash(npm ci)",
+      "Bash(uvicorn:*)",
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git branch:*)",
+      "Bash(git check-ignore:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./backend/.env)",
+      "Read(./frontend/.env)"
+    ]
+  }
+}
