@@ -6,12 +6,11 @@ import {
   UserButton,
   useAuth,
 } from "@clerk/clerk-react";
-import { listRecipes, type Recipe } from "./lib/api";
+import { listRecipes, type Recipe, type TokenGetter } from "./lib/api";
 import AddRecipe from "./components/AddRecipe";
 import RecipeList from "./components/RecipeList";
 
-function Cookbook() {
-  const { getToken } = useAuth();
+function Cookbook({ getToken }: { getToken: TokenGetter }) {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +44,29 @@ function Cookbook() {
   );
 }
 
-export default function App() {
+// Wraps Cookbook with the real Clerk session-token getter.
+function ClerkedCookbook() {
+  const { getToken } = useAuth();
+  return <Cookbook getToken={getToken} />;
+}
+
+export default function App({ disableAuth = false }: { disableAuth?: boolean }) {
+  if (disableAuth) {
+    // No Clerk provider in the tree — never call Clerk hooks here.
+    const getToken: TokenGetter = async () => null;
+    return (
+      <div className="app">
+        <header className="topbar">
+          <h1>🍳 Recipe Extractor</h1>
+          <span className="chip">Dev mode · no auth</span>
+        </header>
+        <main className="container">
+          <Cookbook getToken={getToken} />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <header className="topbar">
@@ -73,7 +94,7 @@ export default function App() {
           </div>
         </SignedOut>
         <SignedIn>
-          <Cookbook />
+          <ClerkedCookbook />
         </SignedIn>
       </main>
     </div>
