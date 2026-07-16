@@ -21,6 +21,8 @@ class Settings(BaseSettings):
 
     # Transcription
     whisper_model: str = "small"
+    # Warm the Whisper model at startup (background thread) for a reliable first request.
+    whisper_preload: bool = True
 
     # Dev toggles
     disable_auth: bool = False

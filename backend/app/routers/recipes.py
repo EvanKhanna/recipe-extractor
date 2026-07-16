@@ -1,3 +1,4 @@
+import logging
 import shutil
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -9,6 +10,8 @@ from ..database import get_db
 from ..models import Recipe
 from ..schemas import RecipeCreateFromUrl, RecipeExtraction, RecipeOut
 from ..services import extractor, media, transcribe
+
+logger = logging.getLogger("recipes")
 
 router = APIRouter(prefix="/api/recipes", tags=["recipes"])
 
@@ -61,13 +64,24 @@ def create_from_url(
         if result.audio_path is not None:
             try:
                 transcript = transcribe.transcribe(result.audio_path)
-            except Exception as exc:  # noqa: BLE001 — transcription is best-effort
-                transcript = ""
-                print(f"[transcribe] failed: {exc}")
+            except Exception:  # noqa: BLE001 — transcription is best-effort
+                logger.exception("Transcription failed for %s", payload.url)
+
+        # Nothing to work with: no written caption and no speech we could hear.
+        if not result.caption and not transcript:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    "This post has no caption text and no speech we could transcribe, "
+                    "so there was nothing to extract. Try a post that writes out or "
+                    "narrates the recipe."
+                ),
+            )
 
         try:
             extraction = extractor.extract_from_text(result.caption, transcript)
         except Exception as exc:  # noqa: BLE001
+            logger.exception("Recipe extraction failed for %s", payload.url)
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"Could not extract a recipe from that post: {exc}",
@@ -96,6 +110,7 @@ def create_from_image(
     try:
         extraction = extractor.extract_from_image(image_bytes, file.content_type)
     except Exception as exc:  # noqa: BLE001
+        logger.exception("Recipe extraction from image failed")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Could not extract a recipe from that image: {exc}",

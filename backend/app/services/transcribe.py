@@ -9,12 +9,12 @@ from ..config import get_settings
 
 
 @lru_cache
-def _model() -> WhisperModel:
+def get_model() -> WhisperModel:
     settings = get_settings()
     # int8 on CPU keeps memory + CPU reasonable while staying accurate enough.
     return WhisperModel(settings.whisper_model, device="cpu", compute_type="int8")
 
 
 def transcribe(audio_path: Path) -> str:
-    segments, _info = _model().transcribe(str(audio_path))
+    segments, _info = get_model().transcribe(str(audio_path))
     return " ".join(segment.text.strip() for segment in segments).strip()

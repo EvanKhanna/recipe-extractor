@@ -28,6 +28,7 @@ def download_audio_and_caption(url: str) -> MediaResult:
         "outtmpl": outtmpl,
         "quiet": True,
         "no_warnings": True,
+        "noprogress": True,
         "noplaylist": True,
         "postprocessors": [
             {
