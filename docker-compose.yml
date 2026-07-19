@@ -34,8 +34,8 @@ services:
     volumes:
       - ./backend:/app
       - whisper_models:/root/.cache/huggingface
-    # Reload on code changes for a smooth dev experience.
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    # Apply DB migrations, then start the server (reloads on code changes in dev).
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
   frontend:
     build: ./frontend

@@ -11,8 +11,10 @@ and [`CLAUDE.md`](../CLAUDE.md) for a working map of the codebase.
 backend/
 ├── Dockerfile
 ├── requirements.txt
+├── alembic.ini           # Alembic config (DB url injected from settings at runtime)
+├── alembic/              # Migrations: env.py + versions/ (schema history)
 └── app/
-    ├── main.py            # FastAPI app, CORS, startup (create_all + Whisper preload)
+    ├── main.py            # FastAPI app, CORS, startup (Whisper preload)
     ├── config.py          # Settings (pydantic-settings, env-driven, cached)
     ├── database.py        # SQLAlchemy engine, session, Base, get_db dependency
     ├── models.py          # Recipe ORM model (single table)
@@ -43,8 +45,12 @@ pip install -r requirements.txt
 export DATABASE_URL="postgresql+psycopg://recipes:recipes@localhost:5432/recipes"
 export DISABLE_AUTH=true          # skip Clerk for local dev
 export ANTHROPIC_API_KEY=sk-ant-...
+alembic upgrade head              # create/upgrade the schema before first run
 uvicorn app.main:app --reload
 ```
+
+Under Docker this migration step runs automatically as part of the backend start
+command; standalone you run it yourself (as above).
 
 Config is read from environment variables (and a `.env` file, via `pydantic-settings`).
 See [`.env.example`](../.env.example) for every variable.
@@ -70,9 +76,16 @@ authenticated user; accessing someone else's recipe returns 404.
   `RecipeExtraction.model_json_schema()`. To change the recipe shape, edit
   `schemas.py::RecipeExtraction` — the tool schema, DB write, and API response all derive
   from it.
-- **No migrations.** `Base.metadata.create_all` runs at startup; changing `models.py`
-  against an existing `postgres_data` volume won't alter live tables. In dev, recreate the
-  volume (`docker compose down -v`) after a schema change.
+- **Migrations (Alembic).** The schema is managed by migrations in `alembic/versions/`,
+  applied via `alembic upgrade head` (run automatically at container startup). After
+  changing `models.py`, generate a migration with
+  `alembic revision --autogenerate -m "describe change"` (needs a running DB to diff
+  against), review the generated file, then upgrade. `alembic/env.py` reads the DB URL
+  from app settings and points at `Base.metadata`.
+  - **Existing dev volume from before Alembic?** It has the `recipes` table but no
+    `alembic_version` row, so `upgrade` will collide. Either wipe it
+    (`docker compose down -v`) or run `alembic stamp head` once to mark it as already
+    at the initial revision.
 - **Transcription is best-effort.** If faster-whisper fails, it's logged and extraction
   proceeds on the caption alone; a post with neither caption nor transcript returns 422.
 - **First video is slow** — the Whisper model downloads on first use (cached in the

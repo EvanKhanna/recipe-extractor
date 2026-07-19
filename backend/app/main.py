@@ -6,7 +6,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .database import Base, engine
 from .routers import recipes
 
 logging.basicConfig(
@@ -32,8 +31,9 @@ def _preload_whisper() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Simple schema bootstrap. For production, switch to Alembic migrations.
-    Base.metadata.create_all(bind=engine)
+    # Schema is managed by Alembic migrations (`alembic upgrade head`), run as a
+    # startup step in the container command — not here. See docker-compose.yml /
+    # Dockerfile and backend/alembic/.
     if settings.whisper_preload:
         threading.Thread(target=_preload_whisper, daemon=True).start()
     yield
