@@ -69,10 +69,13 @@ Never enable either in production.
   `@lru_cache`d via `get_settings()`). Default model `claude-haiku-4-5`. When touching
   anything Anthropic-related, consult the `claude-api` skill rather than guessing model
   ids / params.
-- **DB schema** is bootstrapped with `Base.metadata.create_all` on startup
-  (`main.py` lifespan) — there are **no migrations**. Changing `models.py` against an
-  existing volume won't alter live tables; for a schema change in dev, recreate the
-  `postgres_data` volume.
+- **DB schema is managed by Alembic migrations** (`backend/alembic/`), applied via
+  `alembic upgrade head`, which runs automatically at container startup (see the backend
+  `command` in `docker-compose.yml` and the `CMD` in `backend/Dockerfile`). `env.py` reads
+  the DB URL from `get_settings()` and targets `Base.metadata`. After changing `models.py`,
+  run `alembic revision --autogenerate -m "..."` (against a running DB), review the file,
+  then upgrade. A dev volume predating Alembic needs `alembic stamp head` once, or a
+  `docker compose down -v` wipe, before `upgrade` will apply cleanly.
 - Ingredients and steps are stored as JSON columns on the single `recipes` table
   (`models.py`); there is one table and one model.
 - Whisper is warmed in a background thread at startup (`whisper_preload`); the model
