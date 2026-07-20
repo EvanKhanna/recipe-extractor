@@ -23,7 +23,7 @@ services:
     name: recipe-extractor-api
     runtime: docker
     plan: standard # 2 GB RAM / 1 CPU — needed for Whisper "small"
-    region: virginia # pick the region closest to you/your friends
+    # region: virginia # pick the region closest to you/your friends
     rootDir: backend # build context + Dockerfile live under backend/
     dockerfilePath: ./Dockerfile
     dockerContext: .
