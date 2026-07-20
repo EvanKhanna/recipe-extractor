@@ -58,6 +58,14 @@ Never enable either in production.
 - `GET /api/recipes`, `GET /api/recipes/{id}`, `DELETE /api/recipes/{id}` — all scoped to
   the authenticated user; cross-user access returns 404, never 403.
 
+**Abuse controls on the two extraction endpoints** (they cost Claude + Whisper):
+`enforce_extraction_quota` (`services/ratelimit.py`) replaces `get_current_user_id` there —
+it authenticates *and* applies a per-user rate limit (in-memory, single-instance;
+`EXTRACT_RATE_PER_MINUTE`/`_PER_DAY`), returning 429 when exceeded. `from-url` only accepts
+`tiktok.com`/`instagram.com` hosts (SSRF guard, validated in `schemas.py`); image uploads
+and yt-dlp downloads are size/duration-capped (`MAX_IMAGE_BYTES`, `MAX_VIDEO_BYTES`,
+`MAX_VIDEO_DURATION_S`). Reads are not limited. See `docs/DEPLOY.md` §8.
+
 ## Conventions & things to know
 
 - **Structured output = forced tool call.** `extractor.py` passes

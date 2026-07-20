@@ -6,10 +6,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..auth import get_current_user_id
+from ..config import get_settings
 from ..database import get_db
 from ..models import Recipe
 from ..schemas import RecipeCreateFromUrl, RecipeExtraction, RecipeOut
 from ..services import extractor, media, transcribe
+from ..services.ratelimit import enforce_extraction_quota
 
 logger = logging.getLogger("recipes")
 
@@ -46,7 +48,7 @@ def _persist(
 @router.post("/from-url", response_model=RecipeOut, status_code=status.HTTP_201_CREATED)
 def create_from_url(
     payload: RecipeCreateFromUrl,
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(enforce_extraction_quota),
     db: Session = Depends(get_db),
 ) -> Recipe:
     """Download a TikTok / Reel, transcribe it, and extract a recipe."""
@@ -54,10 +56,11 @@ def create_from_url(
     try:
         try:
             result = media.download_audio_and_caption(payload.url)
-        except Exception as exc:  # noqa: BLE001 — surface a clean error to the client
+        except Exception as exc:  # noqa: BLE001 — log internally, return a clean message
+            logger.exception("Download failed for %s", payload.url)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Could not download that video: {exc}",
+                detail="Could not download that video. Make sure it's a public TikTok or Instagram post.",
             ) from exc
 
         transcript = ""
@@ -84,7 +87,7 @@ def create_from_url(
             logger.exception("Recipe extraction failed for %s", payload.url)
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Could not extract a recipe from that post: {exc}",
+                detail="Could not extract a recipe from that post.",
             ) from exc
 
         return _persist(db, user_id, extraction, "video", payload.url)
@@ -96,7 +99,7 @@ def create_from_url(
 @router.post("/from-image", response_model=RecipeOut, status_code=status.HTTP_201_CREATED)
 def create_from_image(
     file: UploadFile = File(...),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(enforce_extraction_quota),
     db: Session = Depends(get_db),
 ) -> Recipe:
     """Extract a recipe from an uploaded image."""
@@ -106,14 +109,23 @@ def create_from_image(
             detail=f"Unsupported image type: {file.content_type}",
         )
 
-    image_bytes = file.file.read()
+    # Read at most max+1 bytes so an oversized upload can't be pulled entirely into
+    # memory; if we got more than the limit, reject it.
+    max_bytes = get_settings().max_image_bytes
+    image_bytes = file.file.read(max_bytes + 1)
+    if len(image_bytes) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Image is too large (max {max_bytes // (1024 * 1024)} MB).",
+        )
+
     try:
         extraction = extractor.extract_from_image(image_bytes, file.content_type)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Recipe extraction from image failed")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Could not extract a recipe from that image: {exc}",
+            detail="Could not extract a recipe from that image.",
         ) from exc
 
     return _persist(db, user_id, extraction, "image", None)
