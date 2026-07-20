@@ -1,0 +1,91 @@
+# Render Blueprint (Infrastructure as Code) for Recipe Extractor.
+# Docs: https://render.com/docs/blueprint-spec
+#
+# This defines TWO Render services:
+#   1. recipe-extractor-api  — the FastAPI backend, built from backend/Dockerfile
+#   2. recipe-extractor-web  — the Vite frontend, served as a static site
+#
+# The PostgreSQL database is NOT defined here — it lives on Neon (free tier). Its
+# connection string is provided to the backend as the DATABASE_URL secret (see below
+# and docs/DEPLOY.md).
+#
+# Service URLs are derived from the `name` fields:
+#   https://recipe-extractor-api.onrender.com
+#   https://recipe-extractor-web.onrender.com
+# If a name is already taken globally, Render appends a random suffix — if that
+# happens, update the two cross-referencing URLs below (CORS_ORIGINS, VITE_API_URL).
+
+services:
+  # ─────────────────────────────────────────────────────────────
+  # Backend API — FastAPI + Whisper + yt-dlp, in Docker
+  # ─────────────────────────────────────────────────────────────
+  - type: web
+    name: recipe-extractor-api
+    runtime: docker
+    plan: standard # 2 GB RAM / 1 CPU — needed for Whisper "small"
+    region: virginia # pick the region closest to you/your friends
+    rootDir: backend # build context + Dockerfile live under backend/
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health # Render marks the deploy live when this returns 200
+    autoDeploy: true # redeploy automatically on push to the tracked branch
+
+    # Persistent disk so the Whisper model (~0.5 GB) survives restarts/deploys and
+    # isn't re-downloaded every time. NOTE: attaching a disk pins the service to a
+    # single instance and disables zero-downtime deploys — fine at this scale, and
+    # it also means our start-time `alembic upgrade head` never races itself.
+    disk:
+      name: whisper-cache
+      mountPath: /root/.cache/huggingface
+      sizeGB: 2
+
+    envVars:
+      # --- Secrets (set these in the Render dashboard; sync:false = not in git) ---
+      - key: DATABASE_URL # Neon URL, rewritten to the psycopg driver — see docs/DEPLOY.md
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_JWT_ISSUER # e.g. https://your-app.clerk.accounts.dev
+        sync: false
+
+      # --- Non-secret config ---
+      - key: ANTHROPIC_MODEL
+        value: claude-haiku-4-5
+      - key: WHISPER_MODEL
+        value: small
+      - key: DISABLE_AUTH
+        value: "false" # NEVER "true" in production
+      - key: CORS_ORIGINS # must match the frontend's public origin below
+        value: https://recipe-extractor-web.onrender.com
+
+  # ─────────────────────────────────────────────────────────────
+  # Frontend — Vite build served as static files
+  # ─────────────────────────────────────────────────────────────
+  - type: web
+    name: recipe-extractor-web
+    runtime: static
+    region: virginia
+    rootDir: frontend
+    buildCommand: npm install && npm run build # no lockfile in repo, so `install` not `ci`
+    staticPublishPath: dist
+    autoDeploy: true
+
+    envVars:
+      # VITE_* vars are baked into the bundle at BUILD time, not runtime. Changing
+      # one requires a rebuild/redeploy of this service.
+      - key: VITE_API_URL # full backend origin; the app calls `${VITE_API_URL}/recipes/...`
+        value: https://recipe-extractor-api.onrender.com/api
+      - key: VITE_CLERK_PUBLISHABLE_KEY # pk_live_... — set in dashboard (sync:false)
+        sync: false
+      - key: VITE_DISABLE_AUTH
+        value: "false"
+
+    # Single-page-app fallback: serve index.html for any client-side route so deep
+    # links / refreshes don't 404. (API calls go cross-origin to the backend above,
+    # allowed via that service's CORS_ORIGINS — they are not proxied through here.)
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

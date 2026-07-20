@@ -1,0 +1,17 @@
+# Local virtualenv (Mac-arch binaries — never belongs in the Linux image)
+.venv/
+
+# Python caches / build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Alembic bytecode caches (the versions/*.py sources are still copied)
+alembic/**/__pycache__/
+
+# Local env / editor cruft
+.env
+*.log

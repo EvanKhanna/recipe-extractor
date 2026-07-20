@@ -16,5 +16,6 @@ EXPOSE 8000
 
 # Apply any pending DB migrations, then start the server. Running migrations as a
 # startup step (not inside the app) keeps schema changes to a single, ordered pass
-# before traffic is served.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# before traffic is served. Bind to $PORT when the platform provides one (Render),
+# falling back to 8000 for local Docker Compose.
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
