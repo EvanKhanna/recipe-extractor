@@ -75,7 +75,9 @@ services:
       # VITE_* vars are baked into the bundle at BUILD time, not runtime. Changing
       # one requires a rebuild/redeploy of this service.
       - key: VITE_API_URL # full backend origin; the app calls `${VITE_API_URL}/recipes/...`
-        value: https://recipe-extractor-api.onrender.com/api
+        # NOTE: the API service name collided globally, so Render suffixed its URL
+        # with "-kefr". Keep this in sync with the api service's real URL.
+        value: https://recipe-extractor-api-kefr.onrender.com/api
       - key: VITE_CLERK_PUBLISHABLE_KEY # pk_live_... — set in dashboard (sync:false)
         sync: false
       - key: VITE_DISABLE_AUTH
