@@ -155,3 +155,29 @@ We'll tackle this hands-on once we see how Render's IPs are treated.
 
 The backend instance is the main cost; it's sized for the local Whisper `small` model. If
 you later move transcription to an API or a smaller model, you can drop to a cheaper plan.
+
+---
+
+## 8. Security & abuse controls
+
+The app has real auth (Clerk JWTs) and per-user data isolation. The additional controls
+below exist because every extraction costs money (Claude) and CPU (Whisper), and because
+the URL endpoint drives a downloader.
+
+- **Restrict who can sign up (do this).** By default anyone who finds the URL can create a
+  Clerk account and spend your Claude credits. Lock it down in the **Clerk dashboard**:
+  - **Restrictions** → enable an **allowlist** and add only your friends' emails (or turn on
+    "Restrict sign-ups" / invite-only), so strangers can't self-register.
+  - This is the single most important control for a small private app.
+- **Per-user rate limits** (env-driven, enforced in-memory): `EXTRACT_RATE_PER_MINUTE`
+  (default 5) and `EXTRACT_RATE_PER_DAY` (default 50) cap the extraction endpoints per user.
+  Over the limit returns HTTP 429 with `Retry-After`. Reads are not limited. Note: counters
+  are in-memory and reset on restart — fine for a single instance; move to Redis if you ever
+  scale out.
+- **SSRF guard:** `/from-url` only accepts `tiktok.com` / `instagram.com` hosts (and
+  subdomains); anything else is a 422 before the downloader runs.
+- **Size / duration caps:** `MAX_IMAGE_BYTES` (10 MB), `MAX_VIDEO_BYTES` (80 MB), and
+  `MAX_VIDEO_DURATION_S` (30 min) bound memory, bandwidth, and Whisper cost.
+- **Keep `DISABLE_AUTH=false`** in production (it is). Setting it true bypasses auth entirely.
+- **Keep `yt-dlp` / `ffmpeg` updated** — they process untrusted media; update the pins
+  periodically.

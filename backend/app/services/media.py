@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from yt_dlp import YoutubeDL
+from yt_dlp.utils import match_filter_func
+
+from ..config import get_settings
 
 
 @dataclass
@@ -20,6 +23,7 @@ class MediaResult:
 
 
 def download_audio_and_caption(url: str) -> MediaResult:
+    settings = get_settings()
     temp_dir = tempfile.mkdtemp(prefix="recipe_")
     outtmpl = str(Path(temp_dir) / "media.%(ext)s")
 
@@ -30,6 +34,11 @@ def download_audio_and_caption(url: str) -> MediaResult:
         "no_warnings": True,
         "noprogress": True,
         "noplaylist": True,
+        # Abuse/cost guards: abort large downloads, reject over-long videos, and
+        # don't hang forever on a slow host.
+        "max_filesize": settings.max_video_bytes,
+        "match_filter": match_filter_func([f"duration <? {settings.max_video_duration_s}"]),
+        "socket_timeout": 30,
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",

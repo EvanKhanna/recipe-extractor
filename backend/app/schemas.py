@@ -1,6 +1,12 @@
 from datetime import datetime
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+# Only these hosts (and their subdomains) may be handed to yt-dlp. This is the
+# primary defense against SSRF: without it, an authenticated user could point the
+# downloader at internal addresses (localhost, cloud metadata, internal services).
+_ALLOWED_URL_HOSTS = ("instagram.com", "tiktok.com")
 
 
 class Ingredient(BaseModel):
@@ -31,6 +37,19 @@ class RecipeExtraction(BaseModel):
 
 class RecipeCreateFromUrl(BaseModel):
     url: str = Field(description="A TikTok or Instagram Reel URL.")
+
+    @field_validator("url")
+    @classmethod
+    def _validate_url(cls, v: str) -> str:
+        parsed = urlparse(v.strip())
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError("URL must start with http:// or https://")
+        host = (parsed.hostname or "").lower()
+        # Accept the allowed domains and any of their subdomains (e.g. www.,
+        # vm.tiktok.com), but nothing else.
+        if not any(host == d or host.endswith("." + d) for d in _ALLOWED_URL_HOSTS):
+            raise ValueError("Only TikTok and Instagram URLs are supported.")
+        return v.strip()
 
 
 class RecipeOut(BaseModel):
