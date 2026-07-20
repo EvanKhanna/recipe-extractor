@@ -22,13 +22,13 @@ services:
   - type: web
     name: recipe-extractor-api
     runtime: docker
-    plan: standard              # 2 GB RAM / 1 CPU — needed for Whisper "small"
-    region: oregon              # pick the region closest to you/your friends
-    rootDir: backend            # build context + Dockerfile live under backend/
+    plan: standard # 2 GB RAM / 1 CPU — needed for Whisper "small"
+    region: virginia # pick the region closest to you/your friends
+    rootDir: backend # build context + Dockerfile live under backend/
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /api/health # Render marks the deploy live when this returns 200
-    autoDeploy: true            # redeploy automatically on push to the tracked branch
+    autoDeploy: true # redeploy automatically on push to the tracked branch
 
     # Persistent disk so the Whisper model (~0.5 GB) survives restarts/deploys and
     # isn't re-downloaded every time. NOTE: attaching a disk pins the service to a
@@ -41,13 +41,13 @@ services:
 
     envVars:
       # --- Secrets (set these in the Render dashboard; sync:false = not in git) ---
-      - key: DATABASE_URL         # Neon URL, rewritten to the psycopg driver — see docs/DEPLOY.md
+      - key: DATABASE_URL # Neon URL, rewritten to the psycopg driver — see docs/DEPLOY.md
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: CLERK_SECRET_KEY
         sync: false
-      - key: CLERK_JWT_ISSUER     # e.g. https://your-app.clerk.accounts.dev
+      - key: CLERK_JWT_ISSUER # e.g. https://your-app.clerk.accounts.dev
         sync: false
 
       # --- Non-secret config ---
@@ -56,8 +56,8 @@ services:
       - key: WHISPER_MODEL
         value: small
       - key: DISABLE_AUTH
-        value: "false"            # NEVER "true" in production
-      - key: CORS_ORIGINS         # must match the frontend's public origin below
+        value: "false" # NEVER "true" in production
+      - key: CORS_ORIGINS # must match the frontend's public origin below
         value: https://recipe-extractor-web.onrender.com
 
   # ─────────────────────────────────────────────────────────────
@@ -68,16 +68,16 @@ services:
     runtime: static
     region: oregon
     rootDir: frontend
-    buildCommand: npm install && npm run build   # no lockfile in repo, so `install` not `ci`
+    buildCommand: npm install && npm run build # no lockfile in repo, so `install` not `ci`
     staticPublishPath: dist
     autoDeploy: true
 
     envVars:
       # VITE_* vars are baked into the bundle at BUILD time, not runtime. Changing
       # one requires a rebuild/redeploy of this service.
-      - key: VITE_API_URL         # full backend origin; the app calls `${VITE_API_URL}/recipes/...`
+      - key: VITE_API_URL # full backend origin; the app calls `${VITE_API_URL}/recipes/...`
         value: https://recipe-extractor-api.onrender.com/api
-      - key: VITE_CLERK_PUBLISHABLE_KEY   # pk_live_... — set in dashboard (sync:false)
+      - key: VITE_CLERK_PUBLISHABLE_KEY # pk_live_... — set in dashboard (sync:false)
         sync: false
       - key: VITE_DISABLE_AUTH
         value: "false"
